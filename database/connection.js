@@ -1,18 +1,45 @@
 const mysql = require("mysql2/promise")
 require("dotenv").config()
 
-// Database connection configuration
+// Helper to safely read and trim environment variables
+const readEnv = (key, fallback) => {
+  const raw = process.env[key]
+  if (typeof raw === "string") {
+    const t = raw.trim()
+    return t === "" ? fallback : t
+  }
+  return typeof fallback !== "undefined" ? fallback : undefined
+}
+
+// Database connection configuration (trim inputs to avoid accidental spaces)
+const dbHost = readEnv("DB_HOST", "localhost")
+const dbPort = Number(readEnv("DB_PORT", 3306)) || 3306
+const dbUser = readEnv("DB_USER", "queueme_user")
+const dbPassword = readEnv("DB_PASSWORD", "queueme_password")
+const dbName = readEnv("DB_NAME", "queueme_db")
+
 const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || "queueme_user",
-  password: process.env.DB_PASSWORD || "queueme_password",
-  database: process.env.DB_NAME || "queueme_db",
+  host: dbHost,
+  port: dbPort,
+  user: dbUser,
+  password: dbPassword,
+  database: dbName,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   charset: "utf8mb4",
 }
+
+// Mask password for logging
+const mask = (s) => (typeof s === "string" && s.length > 0 ? `${s[0]}***${s.slice(-1)}` : s)
+
+console.log("🔎 Database configuration:", {
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  database: dbConfig.database,
+  password: mask(dbConfig.password),
+})
 
 // Create connection pool
 const pool = mysql.createPool(dbConfig)
@@ -26,8 +53,8 @@ async function testConnection() {
     connection.release()
     return true
   } catch (error) {
-    console.error("❌ Database connection failed:", error.message)
-    console.error("🔧 Please check your database configuration in .env file")
+    console.error("❌ Database connection failed:", error && error.message ? error.message : error)
+    console.error(`🔧 Attempted to connect to ${dbConfig.host}:${dbConfig.port} — please check your DB_HOST/DB_PORT and that the database is reachable from this server`)
     return false
   }
 }
