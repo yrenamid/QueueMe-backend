@@ -12,11 +12,27 @@ const readEnv = (key, fallback) => {
 }
 
 // Database connection configuration (trim inputs to avoid accidental spaces)
-const dbHost = readEnv("DB_HOST", "localhost")
-const dbPort = Number(readEnv("DB_PORT", 3306)) || 3306
-const dbUser = readEnv("DB_USER", "queueme_user")
-const dbPassword = readEnv("DB_PASSWORD", "queueme_password")
-const dbName = readEnv("DB_NAME", "queueme_db")
+// Support a single DATABASE_URL env like: mysql://user:pass@host:3306/dbname
+let dbHost = readEnv("DB_HOST", "localhost")
+let dbPort = Number(readEnv("DB_PORT", 3306)) || 3306
+let dbUser = readEnv("DB_USER", "queueme_user")
+let dbPassword = readEnv("DB_PASSWORD", "queueme_password")
+let dbName = readEnv("DB_NAME", "queueme_db")
+
+const databaseUrl = readEnv('DATABASE_URL', '')
+if (databaseUrl) {
+  try {
+    // Ensure URL has a protocol (mysql://)
+    const parsed = new URL(databaseUrl)
+    if (parsed.hostname) dbHost = parsed.hostname
+    if (parsed.port) dbPort = Number(parsed.port)
+    if (parsed.username) dbUser = decodeURIComponent(parsed.username)
+    if (parsed.password) dbPassword = decodeURIComponent(parsed.password)
+    if (parsed.pathname) dbName = parsed.pathname.replace(/^\//, '')
+  } catch (e) {
+    console.warn('⚠️ Failed to parse DATABASE_URL, falling back to individual DB_* envs:', e.message)
+  }
+}
 
 const dbConfig = {
   host: dbHost,
