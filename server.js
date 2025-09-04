@@ -7,8 +7,6 @@ const morgan = require("morgan")
 const path = require('path')
 const fs = require('fs')
 require("dotenv").config()
-// Preferred frontend base URL for QR codes and cross-origin usage. Can be overridden with BASE_URL.
-const BASE_URL = process.env.BASE_URL || process.env.FRONTEND_URL || "http://localhost:8100"
 
 // Import routes
 const authRoutes = require("./routes/auth")
@@ -18,6 +16,8 @@ const menuRoutes = require("./routes/menu")
 const staffRoutes = require("./routes/staff")
 const qrRoutes = require("./routes/qr")
 const publicRoutes = require('./routes/public')
+const adminRoutes = require('./routes/admin')
+const debugRoutes = require('./routes/debug')
 
 // Import database connection to test it
 require("./database/connection")
@@ -39,18 +39,30 @@ const limiter = rateLimit({
 app.use("/api/", limiter)
 
 // CORS configuration
+// Allow configuring allowed origins via ALLOWED_ORIGINS (comma-separated) or FRONTEND_URL
+const defaultLocalOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:8100",
+  "http://localhost:8100",
+  "http://127.0.0.1:8100",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000"
+];
+const envOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = [...new Set([...envOrigins, ...defaultLocalOrigins])];
+
+console.log('✅ Allowed CORS origins:', allowedOrigins);
+
 const corsOptions = {
-  origin: [
-    BASE_URL,
-    "http://localhost:8100",
-    "http://127.0.0.1:8100",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000"
-  ],
+  origin: function(origin, callback) {
+    // allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
+    return callback(new Error('CORS policy: Origin not allowed'));
+  },
   credentials: true,
   optionsSuccessStatus: 200,
-}
-app.use(cors(corsOptions))
+};
+app.use(cors(corsOptions));
 
 // Body parsing middleware
 app.use(bodyParser.json({ limit: "10mb" }))
@@ -73,7 +85,7 @@ app.use('/uploads', (req, res, next) => {
   // Allow cross-origin embedding/usage of static assets (images) from the frontend origin
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   // Allow frontend origin to fetch these assets
-  res.setHeader('Access-Control-Allow-Origin', BASE_URL);
+  res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:8100');
   // Encourage browsers to cache QR PNGs for one day
   res.setHeader('Cache-Control', 'public, max-age=86400');
   next();
@@ -108,6 +120,8 @@ app.use("/api/menu", menuRoutes)
 app.use("/api/staff", staffRoutes)
 app.use("/api/qr", qrRoutes)
 app.use('/api/public', publicRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/debug', debugRoutes)
 
 // Root endpoint
 app.get("/", (req, res) => {
