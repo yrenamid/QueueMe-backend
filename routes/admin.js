@@ -47,3 +47,25 @@ router.post('/regenerate-qrcodes', authenticateToken, authorizeRoles('admin'), a
 });
 
 module.exports = router;
+
+// Temporary admin-only endpoint to import DB schema from server files
+// Usage: POST /api/admin/import-schema with Authorization Bearer <admin-token>
+// and header `x-import-secret: <IMPORT_SECRET>` where IMPORT_SECRET is set in env.
+router.post('/import-schema', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  try {
+    const secret = process.env.IMPORT_SECRET || ''
+    const provided = req.headers['x-import-secret'] || ''
+    if (!secret || provided !== secret) {
+      return res.status(403).json({ success: false, message: 'Invalid import secret' })
+    }
+
+    // Lazy require to avoid loading when not needed
+    const importer = require('../database/import_schema')
+    await importer.importSchema()
+    return res.json({ success: true, message: 'Schema import started (check logs for details)' })
+  } catch (error) {
+    console.error('Import schema endpoint error:', error)
+    return res.status(500).json({ success: false, message: 'Import failed', error: error.message })
+  }
+})
+
